@@ -1,151 +1,208 @@
-// this file for lerning resources
-
+// this file for  prediction carrer 
 import { NextResponse } from "next/server"
 
-// This function handles GET requests to /api/learning-resources
-export async function GET(request) {
+// This function handles POST requests to /api/predict-career
+export async function POST(request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const skill = searchParams.get("skill")
-    const level = searchParams.get("level") || "beginner"
+    // Parse the request body
+    const body = await request.json()
+    const { interests, skills, education } = body
 
-    if (!skill) {
-      return NextResponse.json({ error: "Missing required 'skill' parameter" }, { status: 400 })
+    // Validate the request
+    if (!interests || !skills || !education) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const resources = await getLearningResources(skill, level)
+    // Generate career recommendations based on inputs
+    const recommendations = generateCareerRecommendations(interests, skills, education)
 
-    return NextResponse.json(resources)
+    // Generate skill gaps and learning paths
+    const skillGaps = identifySkillGaps(recommendations, skills)
+
+    return NextResponse.json({
+      recommendations,
+      skillGaps,
+      timestamp: new Date().toISOString(),
+    })
   } catch (error) {
-    console.error("Error fetching learning resources:", error)
-    return NextResponse.json({ error: "Failed to fetch learning resources" }, { status: 500 })
+    console.error("Error processing career prediction:", error)
+    return NextResponse.json({ error: "Failed to process career prediction" }, { status: 500 })
   }
 }
 
-// Function to get learning resources
-async function getLearningResources(skill, level) {
-  try {
-    const resourceTypes = ["Course", "Tutorial", "Book", "Article", "Video"]
-    const providers = {
-      Course: ["Coursera", "Udemy", "edX", "LinkedIn Learning", "Pluralsight"],
-      Tutorial: ["freeCodeCamp", "W3Schools", "MDN Web Docs", "TutorialsPoint", "GeeksforGeeks"],
-      Book: ["O'Reilly", "Manning", "Packt", "Apress", "No Starch Press"],
-      Article: ["Medium", "Dev.to", "Smashing Magazine", "HackerNoon", "CSS-Tricks"],
-      Video: ["YouTube", "Udemy", "Pluralsight", "Frontend Masters", "egghead.io"],
-    }
+// Function to generate career recommendations
+function generateCareerRecommendations(interests, skills, education) {
+  // Simple career database with required skills and education
+  const careers = [
+    {
+      title: "Software Developer",
+      requiredSkills: ["programming", "problem solving", "javascript", "html", "css"],
+      recommendedEducation: ["Computer Science", "Information Technology", "Software Engineering"],
+      averageSalary: "$95,000",
+      growthOutlook: "High",
+    },
+    {
+      title: "Data Scientist",
+      requiredSkills: ["statistics", "python", "machine learning", "data analysis", "sql"],
+      recommendedEducation: ["Computer Science", "Statistics", "Mathematics"],
+      averageSalary: "$105,000",
+      growthOutlook: "Very High",
+    },
+    {
+      title: "UX Designer",
+      requiredSkills: ["design", "user research", "wireframing", "prototyping", "creativity"],
+      recommendedEducation: ["Design", "Psychology", "Human-Computer Interaction"],
+      averageSalary: "$85,000",
+      growthOutlook: "Medium",
+    },
+    {
+      title: "Digital Marketer",
+      requiredSkills: ["social media", "content creation", "analytics", "seo", "communication"],
+      recommendedEducation: ["Marketing", "Communications", "Business"],
+      averageSalary: "$75,000",
+      growthOutlook: "Medium",
+    },
+    {
+      title: "Project Manager",
+      requiredSkills: ["organization", "leadership", "communication", "planning", "teamwork"],
+      recommendedEducation: ["Business", "Management", "Engineering"],
+      averageSalary: "$90,000",
+      growthOutlook: "Medium",
+    },
+  ]
 
-    const resources = []
+  // Calculate match score for each career
+  const scoredCareers = careers.map((career) => {
+    let score = 0
 
-    for (const type of resourceTypes) {
-      const typeProviders = providers[type]
-      const numResources = Math.floor(Math.random() * 3) + 1
-
-      for (let i = 0; i < numResources; i++) {
-        const provider = typeProviders[Math.floor(Math.random() * typeProviders.length)]
-
-        resources.push({
-          type,
-          title: `${level.charAt(0).toUpperCase() + level.slice(1)} ${skill} ${type}`,
-          provider,
-          url: getResourceUrl(skill, type, provider),
-          level,
-          duration: getResourceDuration(type),
-          rating: (Math.random() * 2 + 3).toFixed(1),
-          cost: getResourceCost(type, provider),
-        })
+    // Check for matching skills
+    career.requiredSkills.forEach((skill) => {
+      if (skills.some((userSkill) => userSkill.toLowerCase().includes(skill))) {
+        score += 2
       }
+    })
+
+    // Check for matching interests
+    interests.forEach((interest) => {
+      if (career.requiredSkills.some((skill) => skill.includes(interest.toLowerCase()))) {
+        score += 1
+      }
+    })
+
+    // Check for matching education
+    if (career.recommendedEducation.some((edu) => education.toLowerCase().includes(edu.toLowerCase()))) {
+      score += 3
     }
 
     return {
-      skill,
-      level,
-      resources,
-      recommendedPath: {
-        steps: [
-          { order: 1, type: "Article", title: `Introduction to ${skill}` },
-          { order: 2, type: "Course", title: `${skill} Fundamentals` },
-          { order: 3, type: "Tutorial", title: `Building with ${skill}` },
-          { order: 4, type: "Project", title: `${skill} Practical Application` },
-        ],
+      ...career,
+      matchScore: score,
+    }
+  })
+
+  // Sort by match score and return top 3
+  return scoredCareers
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 3)
+    .map((career) => ({
+      title: career.title,
+      matchScore: career.matchScore,
+      averageSalary: career.averageSalary,
+      growthOutlook: career.growthOutlook,
+      description: `A career in ${career.title} involves using skills like ${career.requiredSkills.join(", ")}.`,
+    }))
+}
+
+// Function to identify skill gaps
+function identifySkillGaps(recommendations, userSkills) {
+  // Simple database of learning resources
+  const learningResources = {
+    programming: [
+      {
+        name: "Introduction to Programming",
+        provider: "Codecademy",
+        url: "https://www.codecademy.com/learn/introduction-to-programming",
       },
+      {
+        name: "Programming Fundamentals",
+        provider: "edX",
+        url: "https://www.edx.org/search?q=programming+fundamentals",
+      },
+    ],
+    python: [
+      { name: "Learn Python", provider: "Codecademy", url: "https://www.codecademy.com/learn/learn-python-3" },
+      { name: "Python for Everybody", provider: "Coursera", url: "https://www.coursera.org/specializations/python" },
+    ],
+    javascript: [
+      {
+        name: "JavaScript Basics",
+        provider: "freeCodeCamp",
+        url: "https://www.freecodecamp.org/learn/javascript-algorithms-and-data-structures/",
+      },
+      {
+        name: "JavaScript Essential Training",
+        provider: "LinkedIn Learning",
+        url: "https://www.linkedin.com/learning/javascript-essential-training",
+      },
+    ],
+    design: [
+      {
+        name: "Intro to UX Design",
+        provider: "Coursera",
+        url: "https://www.coursera.org/learn/ux-design-fundamentals",
+      },
+      { name: "Design Basics", provider: "Udemy", url: "https://www.udemy.com/topic/graphic-design/" },
+    ],
+    "data analysis": [
+      {
+        name: "Data Analysis with Python",
+        provider: "freeCodeCamp",
+        url: "https://www.freecodecamp.org/learn/data-analysis-with-python/",
+      },
+      { name: "Data Analysis Fundamentals", provider: "edX", url: "https://www.edx.org/search?q=data+analysis" },
+    ],
+  }
+
+  const skillGaps = []
+
+  // For each recommended career
+  recommendations.forEach((career) => {
+    // Get the original career data with required skills
+    const careerData = {
+      "Software Developer": ["programming", "javascript", "html", "css"],
+      "Data Scientist": ["python", "statistics", "data analysis", "machine learning"],
+      "UX Designer": ["design", "user research", "wireframing", "prototyping"],
+      "Digital Marketer": ["social media", "content creation", "analytics", "seo"],
+      "Project Manager": ["organization", "leadership", "communication", "planning"],
     }
 
-  } catch (error) {
-    console.error("Error getting learning resources:", error)
-    throw error
-  }
-}
+    const requiredSkills = careerData[career.title] || []
 
-// Helper function to get resource URL
-function getResourceUrl(skill, type, provider) {
-  const urls = {
-    Coursera: `https://www.coursera.org/search?query=${encodeURIComponent(skill)}`,
-    Udemy: `https://www.udemy.com/courses/search/?q=${encodeURIComponent(skill)}`,
-    edX: `https://www.edx.org/search?q=${encodeURIComponent(skill)}`,
-    "LinkedIn Learning": `https://www.linkedin.com/learning/search?keywords=${encodeURIComponent(skill)}`,
-    Pluralsight: `https://www.pluralsight.com/search?q=${encodeURIComponent(skill)}`,
-    freeCodeCamp: `https://www.freecodecamp.org/news/search?query=${encodeURIComponent(skill)}`,
-    W3Schools: `https://www.w3schools.com/search/search.php?q=${encodeURIComponent(skill)}`,
-    "MDN Web Docs": `https://developer.mozilla.org/en-US/search?q=${encodeURIComponent(skill)}`,
-    TutorialsPoint: `https://www.tutorialspoint.com/index.htm?search=${encodeURIComponent(skill)}`,
-    GeeksforGeeks: `https://www.geeksforgeeks.org/search?q=${encodeURIComponent(skill)}`,
-    Medium: `https://medium.com/search?q=${encodeURIComponent(skill)}`,
-    "Dev.to": `https://dev.to/search?q=${encodeURIComponent(skill)}`,
-    "Smashing Magazine": `https://www.smashingmagazine.com/search/?q=${encodeURIComponent(skill)}`,
-    HackerNoon: `https://hackernoon.com/search?query=${encodeURIComponent(skill)}`,
-    "CSS-Tricks": `https://css-tricks.com/?s=${encodeURIComponent(skill)}`,
-    YouTube: `https://www.youtube.com/results?search_query=${encodeURIComponent(skill)}+tutorial`,
-    "Frontend Masters": `https://frontendmasters.com/search/?q=${encodeURIComponent(skill)}`,
-    "egghead.io": `https://egghead.io/q/${encodeURIComponent(skill)}`,
-  }
+    // Find skills the user is missing
+    const missingSkills = requiredSkills.filter(
+      (skill) => !userSkills.some((userSkill) => userSkill.toLowerCase().includes(skill)),
+    )
 
-  return urls[provider] || `https://www.google.com/search?q=${encodeURIComponent(skill)}+${encodeURIComponent(type)}+${encodeURIComponent(provider)}`
-}
+    // For each missing skill, find learning resources
+    const learningPaths = missingSkills.map((skill) => {
+      const resources = learningResources[skill] || [
+        { name: `Learn ${skill}`, provider: "Coursera", url: `https://www.coursera.org/search?query=${skill}` },
+      ]
 
-// Helper function to get resource duration
-function getResourceDuration(type) {
-  switch (type) {
-    case "Course":
-      return `${Math.floor(Math.random() * 8) + 4} weeks`
-    case "Tutorial":
-      return `${Math.floor(Math.random() * 120) + 30} minutes`
-    case "Book":
-      return `${Math.floor(Math.random() * 400) + 200} pages`
-    case "Article":
-      return `${Math.floor(Math.random() * 20) + 5} minutes`
-    case "Video":
-      return `${Math.floor(Math.random() * 120) + 10} minutes`
-    default:
-      return "Varies"
-  }
-}
+      return {
+        skill,
+        resources: resources.slice(0, 2), // Return up to 2 resources per skill
+      }
+    })
 
-// Helper function to get resource cost
-function getResourceCost(type, provider) {
-  const freeProbability = 0.3
+    if (learningPaths.length > 0) {
+      skillGaps.push({
+        careerTitle: career.title,
+        missingSkills,
+        learningPaths,
+      })
+    }
+  })
 
-  if (
-    Math.random() < freeProbability ||
-    provider === "freeCodeCamp" ||
-    provider === "W3Schools" ||
-    provider === "MDN Web Docs" ||
-    provider === "YouTube"
-  ) {
-    return "Free"
-  }
-
-  switch (type) {
-    case "Course":
-      return `$${Math.floor(Math.random() * 150) + 50}`
-    case "Tutorial":
-      return Math.random() < 0.7 ? "Free" : `$${Math.floor(Math.random() * 30) + 10}`
-    case "Book":
-      return `$${Math.floor(Math.random() * 50) + 20}`
-    case "Article":
-      return Math.random() < 0.8 ? "Free" : `$${Math.floor(Math.random() * 10) + 5}`
-    case "Video":
-      return Math.random() < 0.6 ? "Free" : `$${Math.floor(Math.random() * 20) + 10}`
-    default:
-      return "Varies"
-  }
+  return skillGaps
 }
