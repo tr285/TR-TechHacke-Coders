@@ -1,208 +1,166 @@
-// this file for  prediction carrer 
-import { NextResponse } from "next/server"
+// this file for persnallity assistment 
 
-// This function handles POST requests to /api/predict-career
+import { NextResponse } from "next/server";
+
+// This function handles POST requests to /api/personality-assessment
 export async function POST(request) {
   try {
-    // Parse the request body
-    const body = await request.json()
-    const { interests, skills, education } = body
+    const body = await request.json();
+    const { answers } = body;
 
-    // Validate the request
-    if (!interests || !skills || !education) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!answers || !Array.isArray(answers)) {
+      return NextResponse.json({ error: "Missing or invalid answers array" }, { status: 400 });
     }
 
-    // Generate career recommendations based on inputs
-    const recommendations = generateCareerRecommendations(interests, skills, education)
-
-    // Generate skill gaps and learning paths
-    const skillGaps = identifySkillGaps(recommendations, skills)
-
-    return NextResponse.json({
-      recommendations,
-      skillGaps,
-      timestamp: new Date().toISOString(),
-    })
+    const results = processPersonalityAssessment(answers);
+    return NextResponse.json(results);
   } catch (error) {
-    console.error("Error processing career prediction:", error)
-    return NextResponse.json({ error: "Failed to process career prediction" }, { status: 500 })
+    console.error("Error processing personality assessment:", error);
+    return NextResponse.json({ error: "Failed to process personality assessment" }, { status: 500 });
   }
 }
 
-// Function to generate career recommendations
-function generateCareerRecommendations(interests, skills, education) {
-  // Simple career database with required skills and education
-  const careers = [
-    {
-      title: "Software Developer",
-      requiredSkills: ["programming", "problem solving", "javascript", "html", "css"],
-      recommendedEducation: ["Computer Science", "Information Technology", "Software Engineering"],
-      averageSalary: "$95,000",
-      growthOutlook: "High",
-    },
-    {
-      title: "Data Scientist",
-      requiredSkills: ["statistics", "python", "machine learning", "data analysis", "sql"],
-      recommendedEducation: ["Computer Science", "Statistics", "Mathematics"],
-      averageSalary: "$105,000",
-      growthOutlook: "Very High",
-    },
-    {
-      title: "UX Designer",
-      requiredSkills: ["design", "user research", "wireframing", "prototyping", "creativity"],
-      recommendedEducation: ["Design", "Psychology", "Human-Computer Interaction"],
-      averageSalary: "$85,000",
-      growthOutlook: "Medium",
-    },
-    {
-      title: "Digital Marketer",
-      requiredSkills: ["social media", "content creation", "analytics", "seo", "communication"],
-      recommendedEducation: ["Marketing", "Communications", "Business"],
-      averageSalary: "$75,000",
-      growthOutlook: "Medium",
-    },
-    {
-      title: "Project Manager",
-      requiredSkills: ["organization", "leadership", "communication", "planning", "teamwork"],
-      recommendedEducation: ["Business", "Management", "Engineering"],
-      averageSalary: "$90,000",
-      growthOutlook: "Medium",
-    },
-  ]
+function processPersonalityAssessment(answers) {
+  try {
+    const dimensions = [
+      { name: "Analytical", score: 0 },
+      { name: "Creative", score: 0 },
+      { name: "Practical", score: 0 },
+      { name: "Social", score: 0 },
+      { name: "Leadership", score: 0 },
+    ];
 
-  // Calculate match score for each career
-  const scoredCareers = careers.map((career) => {
-    let score = 0
+    answers.forEach((answer) => {
+      const { questionId, value } = answer;
 
-    // Check for matching skills
-    career.requiredSkills.forEach((skill) => {
-      if (skills.some((userSkill) => userSkill.toLowerCase().includes(skill))) {
-        score += 2
-      }
-    })
+      const questionMap = {
+        q1: ["Analytical"],
+        q2: ["Creative"],
+        q3: ["Practical"],
+        q4: ["Social"],
+        q5: ["Leadership"],
+        q6: ["Analytical", "Practical"],
+        q7: ["Creative", "Social"],
+        q8: ["Leadership", "Social"],
+        q9: ["Analytical", "Creative"],
+        q10: ["Practical", "Leadership"],
+      };
 
-    // Check for matching interests
-    interests.forEach((interest) => {
-      if (career.requiredSkills.some((skill) => skill.includes(interest.toLowerCase()))) {
-        score += 1
-      }
-    })
+      const dimensionsToUpdate = questionMap[questionId] || [];
+      dimensionsToUpdate.forEach((dim) => {
+        const dimension = dimensions.find((d) => d.name === dim);
+        if (dimension) {
+          dimension.score += value;
+        }
+      });
+    });
 
-    // Check for matching education
-    if (career.recommendedEducation.some((edu) => education.toLowerCase().includes(edu.toLowerCase()))) {
-      score += 3
-    }
+    const maxPossibleScore = 25;
+    dimensions.forEach((dim) => {
+      dim.score = Math.min(100, Math.round((dim.score / maxPossibleScore) * 100));
+    });
+
+    const sortedDimensions = [...dimensions].sort((a, b) => b.score - a.score);
+    const primaryTrait = sortedDimensions[0].name;
+    const secondaryTrait = sortedDimensions[1].name;
+
+    const personalityProfile = generatePersonalityProfile(primaryTrait, secondaryTrait);
+    const careerRecommendations = generateCareerRecommendations(sortedDimensions);
 
     return {
-      ...career,
-      matchScore: score,
-    }
-  })
-
-  // Sort by match score and return top 3
-  return scoredCareers
-    .sort((a, b) => b.matchScore - a.matchScore)
-    .slice(0, 3)
-    .map((career) => ({
-      title: career.title,
-      matchScore: career.matchScore,
-      averageSalary: career.averageSalary,
-      growthOutlook: career.growthOutlook,
-      description: `A career in ${career.title} involves using skills like ${career.requiredSkills.join(", ")}.`,
-    }))
+      dimensions: sortedDimensions,
+      personalityProfile,
+      careerRecommendations,
+      traits: [primaryTrait, secondaryTrait, ...getPersonalityTraits(primaryTrait, secondaryTrait)],
+    };
+  } catch (error) {
+    console.error("Error processing personality assessment:", error);
+    throw error;
+  }
 }
 
-// Function to identify skill gaps
-function identifySkillGaps(recommendations, userSkills) {
-  // Simple database of learning resources
-  const learningResources = {
-    programming: [
-      {
-        name: "Introduction to Programming",
-        provider: "Codecademy",
-        url: "https://www.codecademy.com/learn/introduction-to-programming",
-      },
-      {
-        name: "Programming Fundamentals",
-        provider: "edX",
-        url: "https://www.edx.org/search?q=programming+fundamentals",
-      },
+function generatePersonalityProfile(primaryTrait, secondaryTrait) {
+  const profiles = {
+    Analytical: {
+      Creative: "You are a logical thinker with a creative edge...",
+      Practical: "You have a methodical and pragmatic approach...",
+      Social: "You combine analytical thinking with strong interpersonal skills...",
+      Leadership: "You have a strategic mind with leadership capabilities...",
+    },
+    Creative: {
+      Analytical: "You have an innovative mind balanced with logical thinking...",
+      Practical: "You combine creativity with a hands-on approach...",
+      Social: "You have a creative spirit with strong people skills...",
+      Leadership: "You are an innovative visionary with leadership abilities...",
+    },
+    Practical: {
+      Analytical: "You have a pragmatic approach supported by analytical skills...",
+      Creative: "You combine hands-on skills with creative thinking...",
+      Social: "You have a practical mindset with strong interpersonal skills...",
+      Leadership: "You are a practical leader who gets things done...",
+    },
+    Social: {
+      Analytical: "You combine people skills with analytical thinking...",
+      Creative: "You have strong interpersonal skills paired with creativity...",
+      Practical: "You combine people skills with a practical approach...",
+      Leadership: "You are a people-oriented leader...",
+    },
+    Leadership: {
+      Analytical: "You are a strategic leader with analytical skills...",
+      Creative: "You are an innovative leader who inspires others...",
+      Practical: "You are a results-oriented leader...",
+      Social: "You are a people-focused leader...",
+    },
+  };
+
+  return (
+    profiles[primaryTrait]?.[secondaryTrait] ||
+    "You have a unique combination of traits that gives you versatility across different types of work."
+  );
+}
+
+function getPersonalityTraits(primaryTrait, secondaryTrait) {
+  const traitMap = {
+    Analytical: ["logical", "detail-oriented", "systematic", "objective", "critical-thinker"],
+    Creative: ["innovative", "imaginative", "original", "artistic", "visionary"],
+    Practical: ["hands-on", "efficient", "organized", "reliable", "resourceful"],
+    Social: ["empathetic", "communicative", "collaborative", "supportive", "personable"],
+    Leadership: ["decisive", "motivating", "strategic", "confident", "influential"],
+  };
+
+  const primaryTraits = traitMap[primaryTrait] || [];
+  const secondaryTraits = traitMap[secondaryTrait] || [];
+
+  return [...primaryTraits.slice(0, 3), ...secondaryTraits.slice(0, 2)];
+}
+
+function generateCareerRecommendations(dimensions) {
+  const careerMap = {
+    Analytical: ["Data Scientist", "Software Engineer", "Financial Analyst", "Research Scientist", "Business Analyst"],
+    Creative: ["UX/UI Designer", "Content Creator", "Marketing Specialist", "Product Designer", "Art Director"],
+    Practical: [
+      "Project Manager",
+      "Operations Manager",
+      "Civil Engineer",
+      "Healthcare Administrator",
+      "Supply Chain Manager",
     ],
-    python: [
-      { name: "Learn Python", provider: "Codecademy", url: "https://www.codecademy.com/learn/learn-python-3" },
-      { name: "Python for Everybody", provider: "Coursera", url: "https://www.coursera.org/specializations/python" },
+    Social: [
+      "Human Resources Specialist",
+      "Customer Success Manager",
+      "Social Worker",
+      "Teacher/Trainer",
+      "Community Manager",
     ],
-    javascript: [
-      {
-        name: "JavaScript Basics",
-        provider: "freeCodeCamp",
-        url: "https://www.freecodecamp.org/learn/javascript-algorithms-and-data-structures/",
-      },
-      {
-        name: "JavaScript Essential Training",
-        provider: "LinkedIn Learning",
-        url: "https://www.linkedin.com/learning/javascript-essential-training",
-      },
-    ],
-    design: [
-      {
-        name: "Intro to UX Design",
-        provider: "Coursera",
-        url: "https://www.coursera.org/learn/ux-design-fundamentals",
-      },
-      { name: "Design Basics", provider: "Udemy", url: "https://www.udemy.com/topic/graphic-design/" },
-    ],
-    "data analysis": [
-      {
-        name: "Data Analysis with Python",
-        provider: "freeCodeCamp",
-        url: "https://www.freecodecamp.org/learn/data-analysis-with-python/",
-      },
-      { name: "Data Analysis Fundamentals", provider: "edX", url: "https://www.edx.org/search?q=data+analysis" },
-    ],
-  }
+    Leadership: ["Product Manager", "Team Lead", "Entrepreneur", "Program Director", "Executive"],
+  };
 
-  const skillGaps = []
+  const topDimensions = dimensions.slice(0, 3);
+  const recommendations = [];
 
-  // For each recommended career
-  recommendations.forEach((career) => {
-    // Get the original career data with required skills
-    const careerData = {
-      "Software Developer": ["programming", "javascript", "html", "css"],
-      "Data Scientist": ["python", "statistics", "data analysis", "machine learning"],
-      "UX Designer": ["design", "user research", "wireframing", "prototyping"],
-      "Digital Marketer": ["social media", "content creation", "analytics", "seo"],
-      "Project Manager": ["organization", "leadership", "communication", "planning"],
-    }
+  recommendations.push(...careerMap[topDimensions[0].name].slice(0, 3));
+  recommendations.push(...careerMap[topDimensions[1].name].slice(0, 2));
+  recommendations.push(careerMap[topDimensions[2].name][0]);
 
-    const requiredSkills = careerData[career.title] || []
-
-    // Find skills the user is missing
-    const missingSkills = requiredSkills.filter(
-      (skill) => !userSkills.some((userSkill) => userSkill.toLowerCase().includes(skill)),
-    )
-
-    // For each missing skill, find learning resources
-    const learningPaths = missingSkills.map((skill) => {
-      const resources = learningResources[skill] || [
-        { name: `Learn ${skill}`, provider: "Coursera", url: `https://www.coursera.org/search?query=${skill}` },
-      ]
-
-      return {
-        skill,
-        resources: resources.slice(0, 2), // Return up to 2 resources per skill
-      }
-    })
-
-    if (learningPaths.length > 0) {
-      skillGaps.push({
-        careerTitle: career.title,
-        missingSkills,
-        learningPaths,
-      })
-    }
-  })
-
-  return skillGaps
+  return [...new Set(recommendations)];
 }
